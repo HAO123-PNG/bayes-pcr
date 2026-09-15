@@ -1,0 +1,127 @@
+start snippingtool
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>二级贝叶斯‑PCR检测模拟｜生物工程案例</title>
+<style>
+body{padding:24px;font-family:Microsoft Yahei}
+canvas{border:1px solid #888;margin-top:12px}
+.control{margin:8px 0}
+</style>
+</head>
+<body>
+<h2>PCR筛查工程菌 — 二级贝叶斯后验概率动态模拟</h2>
+<div class="control">
+<label>先验Beta α：<input type="range" min="1" max="30" value="3" id="a"></label>
+&nbsp;&nbsp;&nbsp;
+<label>先验Beta β：<input type="range" min="1" max="30" value="15" id="b"></label>
+</div>
+<div class="control">
+<label>灵敏度(真阳性率)：<input type="range" min="0.70" max="0.99" step="0.01" value="0.95" id="sens"></label>
+&nbsp;&nbsp;&nbsp;
+<label>假阳性率：<input type="range" min="0.01" max="0.20" step="0.01" value="0.05" id="fpr"></label>
+</div>
+<canvas id="plt" width="800" height="420"></canvas>
+<script>
+const canvas = document.getElementById("plt");
+const ctx = canvas.getContext("2d");
+const W = canvas.width;
+const H = canvas.height;
+const padLeft = 60, padRight = 20, padTop = 40, padBot =50;
+
+//伽马函数近似，全部英文符号
+function gamma(z){
+    if(z<0.5) return Math.PI/(Math.sin(Math.PI*z)*gamma(1-z));
+    z -=1;
+    const c=[0.99999999999981,676.52036812189,-1259.1392167224,771.32342877765,-176.61502916214,12.507343278687,-0.13857109526572,9.98436957802e-6,1.50563273515e-7];
+    const g=7;
+    let x=c[0];
+    for(let i=1;i<g+2;i++) x += c[i]/(z+i);
+    const t=z+g+0.5;
+    return Math.sqrt(2*Math.PI)*Math.pow(t,z+0.5)*Math.exp(-t)*x;
+}
+
+//Beta概率密度函数
+function betaPDF(x,a,b){
+    if(x<=0||x>=1) return 0;
+    const B = gamma(a)*gamma(b)/gamma(a+b);
+    return Math.pow(x,a-1)*Math.pow(1-x,b-1)/B;
+}
+
+//绘图主函数
+function drawCurve(label,pointList,color,maxY){
+    ctx.beginPath();
+    ctx.strokeStyle=color;
+    ctx.lineWidth=2;
+    for(let i=0;i<pointList.length;i++){
+        const p = pointList[i][0];
+        const yv= pointList[i][1];
+        const px = padLeft + p/(1.0)*(W-padLeft-padRight);
+        const py = H-padBot- (yv/maxY)*(H-padTop-padBot);
+        if(i===0) ctx.moveTo(px,py);
+        else ctx.lineTo(px,py);
+    }
+    ctx.stroke();
+}
+
+function update(){
+    const a=Number(document.getElementById("a").value);
+    const b=Number(document.getElementById("b").value);
+    const sens=Number(document.getElementById("sens").value);
+    const fpr=Number(document.getElementById("fpr").value);
+
+    const priorData=[];
+    const postData=[];
+    let maxVal=0;
+    const N=200;
+    for(let i=0;i<=N;i++){
+        const p = i / N;
+        const pdfPri = betaPDF(p,a,b);
+        const denom = sens*p + fpr*(1-p);
+        const postP = denom===0 ? 0 : (sens*p)/denom;
+        const pdfPost = betaPDF(postP,a+1,b);
+        priorData.push([p,pdfPri]);
+        postData.push([p,pdfPost]);
+        if(pdfPri>maxVal) maxVal=pdfPri;
+        if(pdfPost>maxVal) maxVal=pdfPost;
+    }
+
+    //清空画布
+    ctx.fillStyle="#ffffff";
+    ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle="#333333";
+    ctx.lineWidth=1;
+
+    //坐标轴
+    ctx.beginPath();
+    ctx.moveTo(padLeft,padTop);
+    ctx.lineTo(padLeft,H-padBot);
+    ctx.lineTo(W-padRight,H-padBot);
+    ctx.stroke();
+
+    drawCurve("先验分布",priorData,"#0055ff",maxVal);
+    drawCurve("后验分布",postData,"#dd2222",maxVal);
+
+    //文字标注
+    ctx.fillStyle="#0055ff";
+    ctx.font="16px microsoft yahei";
+    ctx.fillText("蓝色：先验Beta分布",620,60);
+    ctx.fillStyle="#dd2222";
+    ctx.fillText("红色：阳性证据后的后验分布",620,85);
+    ctx.fillStyle="#000000";
+    ctx.fillText("阳性概率 p",W/2-40,H-10);
+    ctx.save();
+    ctx.translate(18,H/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText("概率密度",0,0);
+    ctx.restore();
+}
+
+["a","b","sens","fpr"].forEach(id=>{
+    document.getElementById(id).oninput = update;
+})
+update();
+</script>
+</body>
+</html>
